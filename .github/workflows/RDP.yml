@@ -54,23 +54,3 @@ jobs:
           Write-Output "::error::Ngrok tunnel could not be established"
           exit 1
         }
-
-        Write-Output "============================================"
-        Write-Output "||     ✅ RDP CONNECTION DETAILS         ||"
-        Write-Output "============================================"
-        Write-Output "Address: $tunnelUrl"
-        Write-Output "Username: kamel007"
-        Write-Output "Password: Kamel@123"
-        Write-Output "--------------------------------------------"
-        Write-Output "Instructions:"
-        Write-Output "1. Press Win + R, type 'mstsc' and hit Enter"
-        Write-Output "2. Connect to: $tunnelUrl"
-        Write-Output "3. Use credentials above"
-        Write-Output "============================================"
-
-        while ($true) { Start-Sleep -Seconds 300 }
-
-    - name: Cleanup Ngrok
-      if: always()
-      run: |
-        Stop-Process -Name "ngrok" -Force -ErrorAction SilentlyContinue
