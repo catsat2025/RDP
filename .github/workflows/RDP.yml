@@ -5,20 +5,18 @@ on: [push]
 jobs:
   rdp-setup:
     runs-on: windows-latest
-    timeout-minutes: 360  # GitHub Free max runtime is 6 hours
+    timeout-minutes: 360  # Max allowed on GitHub Free tier is 6 hours
 
     steps:
     - name: Download and extract Ngrok
       run: |
-        Invoke-WebRequest "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile ngrok.zip
-        Expand-Archive ngrok.zip -DestinationPath "$env:USERPROFILE"
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile ngrok.zip
+        Expand-Archive -Path ngrok.zip -DestinationPath "$env:USERPROFILE"
         Remove-Item ngrok.zip
         Copy-Item "$env:USERPROFILE\ngrok.exe" "$env:GITHUB_WORKSPACE"
 
     - name: Authenticate Ngrok
-      run: |
-        $ErrorActionPreference = "Stop"
-        .\ngrok.exe authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
+      run: .\ngrok.exe authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
 
     - name: Enable RDP and Firewall
       run: |
@@ -28,29 +26,48 @@ jobs:
 
     - name: Create Admin User
       run: |
-        net user kamel007 Kamel@123 /add
+        net user kamel007 "Kamel@123" /add
         net localgroup administrators kamel007 /add
 
-    - name: Start Ngrok Tunnel
+    - name: Start Ngrok Tunnel and Show RDP Info
       run: |
-        Start-Process -FilePath "$pwd\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout" -NoNewWindow -RedirectStandardOutput ngrok.log
+        Start-Process -FilePath "$pwd\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+        Start-Sleep -Seconds 10
 
         $tunnelUrl = $null
-        $timeout = 60
+        $retries = 12
 
-        while ($timeout -gt 0 -and -not $tunnelUrl) {
-          Start-Sleep -Seconds 5
-          $timeout -= 5
+        while ($retries -gt 0 -and -not $tunnelUrl) {
           try {
-            $response = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -ErrorAction Stop
+            $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
             $tunnelUrl = $response.tunnels[0].public_url -replace "tcp://", ""
           } catch {
-            $logContent = Get-Content ngrok.log -ErrorAction SilentlyContinue
-            $tunnelUrl = $logContent | Select-String -Pattern "tcp://([a-zA-Z0-9\.\-]+:\d+)" | ForEach-Object { $_.Matches.Groups[1].Value }
+            Start-Sleep -Seconds 5
           }
+          $retries -= 1
         }
 
         if (-not $tunnelUrl) {
           Write-Output "::error::Ngrok tunnel could not be established"
           exit 1
         }
+
+        Write-Host "============================================"
+        Write-Host "||     ✅ RDP CONNECTION DETAILS         ||"
+        Write-Host "============================================"
+        Write-Host "Address: $tunnelUrl"
+        Write-Host "Username: kamel007"
+        Write-Host "Password: Kamel@123"
+        Write-Host "--------------------------------------------"
+        Write-Host "Instructions:"
+        Write-Host "1. Press Win + R, type 'mstsc' and hit Enter"
+        Write-Host "2. Connect to: $tunnelUrl"
+        Write-Host "3. Use credentials above"
+        Write-Host "============================================"
+
+        while ($true) { Start-Sleep -Seconds 300 }
+
+    - name: Cleanup Ngrok
+      if: always()
+      run: |
+        Stop-Process -Name "ngrok" -Force -ErrorAction SilentlyContinue
