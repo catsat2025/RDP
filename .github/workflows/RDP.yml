@@ -74,4 +74,3 @@ jobs:
       if: always()
       run: |
         Stop-Process -Name "ngrok" -Force -ErrorAction SilentlyContinue
-bin.equinox.io
